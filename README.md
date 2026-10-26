@@ -44,9 +44,20 @@ The application does not upload the camera stream to its own server. The browser
 
 The squat preview uses a state machine to identify standing, descending, bottom and ascending phases; it counts a rep only when the user returns to a near-standing knee angle. It estimates knee angle in the 2D image plane, applies temporal smoothing, and compares the lowest angle with a configurable threshold. Reps can be counted even when the selected target was not reached, and the UI reports that separately. Torso lean is shown only as an estimate, not graded. These heuristics are not personalized biomechanical advice and do not determine whether an exercise is safe. Use a side-on camera view and validate thresholds with a qualified coach before relying on the feedback.
 
+## Squat analysis and test coverage
+
+The initial unit tests cover:
+- Joint-angle calculations in pixel space, including non-square camera frames
+- Rejection of low-confidence and degenerate landmarks
+- Full squat rep counting and target-depth classification
+- Counting a shallow rep while reporting that the configured target was missed
+- Missing landmarks, target-threshold clamping, and session reset
+
+The current thresholds are heuristics for a side-view camera and should be validated with a qualified coach before public use. A passing unit test checks the code's logic, not real-world biomechanical accuracy.
+
 ## Continuous integration
 
-GitHub Actions validates dependency installation, ESLint, TypeScript checking, and a production build on pushes and pull requests targeting `master`. It uses `npm ci` when the committed lockfile matches the manifest. If dependencies change, CI generates an updated lockfile and commits it on a successful push to `master`.
+GitHub Actions validates dependency installation, ESLint, unit tests, TypeScript checking, and a production build on pushes and pull requests targeting `master`. It uses `npm ci` when the committed lockfile matches the manifest. If dependencies change, CI generates an updated lockfile and commits it on a successful push to `master`.
 
 ## Project layout
 
