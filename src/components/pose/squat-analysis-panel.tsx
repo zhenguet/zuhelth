@@ -24,6 +24,10 @@ function formatDuration(value: number): string {
 }
 
 export function SquatAnalysisPanel({ snapshot, onDepthTargetChange }: SquatAnalysisPanelProps) {
+  const isRepActive =
+    snapshot.phase === "descending" ||
+    snapshot.phase === "bottom" ||
+    snapshot.phase === "ascending";
   const phaseColor =
     snapshot.phase === "bottom"
       ? "bg-[#e7f2df] text-[#31563a]"
@@ -85,7 +89,7 @@ export function SquatAnalysisPanel({ snapshot, onDepthTargetChange }: SquatAnaly
           max={130}
           step={5}
           value={snapshot.depthTargetDegrees}
-          disabled={snapshot.currentRepDurationMs !== null}
+          disabled={isRepActive}
           onChange={(event) => onDepthTargetChange(Number(event.currentTarget.value))}
           className="mt-3 w-full accent-[#31563a]"
           aria-describedby="depth-target-help"
@@ -95,7 +99,7 @@ export function SquatAnalysisPanel({ snapshot, onDepthTargetChange }: SquatAnaly
           <span>Shallower bend · 130°</span>
         </div>
         <p id="depth-target-help" className="mt-2 text-xs leading-5 text-[#66736b]">
-          {snapshot.currentRepDurationMs !== null
+          {isRepActive
             ? "The target is locked for the active rep. You can change it when you return to standing."
             : "The target applies to the next rep. Depth is confirmed over consecutive frames to reduce one-frame landmark noise. This is not a universal form standard."}
         </p>
