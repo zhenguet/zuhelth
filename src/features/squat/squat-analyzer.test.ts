@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
-import { calculateJointAngleDegrees } from "@/features/squat/geometry";
-import { SquatAnalyzer } from "@/features/squat/squat-analyzer";
-import type { PoseLandmark, SquatFrame } from "@/features/squat/types";
+import { calculateJointAngleDegrees } from "./geometry";
+import { SquatAnalyzer } from "./squat-analyzer";
+import type { PoseLandmark, SquatFrame } from "./types";
 
 function landmark(x: number, y: number, visibility = 1): PoseLandmark {
   return { x, y, visibility, presence: visibility };
@@ -13,9 +13,11 @@ function makePose(kneeAngleDegrees: number): PoseLandmark[] {
   const knee = landmark(0.5, 0.5);
   const directionDegrees = -90 + kneeAngleDegrees;
   const directionRadians = (directionDegrees * Math.PI) / 180;
+  // Construct the synthetic vector in pixels, then convert each axis to normalized coordinates.
+  const radiusPixels = 48;
   const ankle = landmark(
-    knee.x + 0.1 * Math.cos(directionRadians),
-    knee.y + 0.1 * Math.sin(directionRadians),
+    knee.x + (radiusPixels * Math.cos(directionRadians)) / 640,
+    knee.y + (radiusPixels * Math.sin(directionRadians)) / 480,
   );
 
   landmarks[11] = landmark(0.5, 0.18);

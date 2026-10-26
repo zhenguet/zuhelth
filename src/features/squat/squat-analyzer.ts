@@ -1,5 +1,5 @@
-import { calculateSquatMetrics } from "@/features/squat/geometry";
-import type { SquatAnalysisSnapshot, SquatFrame, SquatPhase, CompletedRep, PoseQuality } from "@/features/squat/types";
+import { calculateSquatMetrics } from "./geometry";
+import type { SquatAnalysisSnapshot, SquatFrame, SquatPhase, CompletedRep, PoseQuality } from "./types";
 
 export interface SquatAnalyzerOptions {
   standingAngleDegrees?: number;

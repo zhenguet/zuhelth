@@ -1,4 +1,4 @@
-import type { PoseLandmark, SquatMetrics } from "@/features/squat/types";
+import type { PoseLandmark, SquatMetrics } from "./types";
 
 export const LANDMARK_INDEX = {
   leftShoulder: 11, rightShoulder: 12,
@@ -70,6 +70,8 @@ function midpoint(
 
 function calculateTrunkLeanDegrees(
   landmarks: readonly PoseLandmark[],
+  width: number,
+  height: number,
   threshold: number,
 ): number | null {
   const shoulders = midpoint(
@@ -83,8 +85,9 @@ function calculateTrunkLeanDegrees(
     threshold,
   );
   if (!shoulders || !hips) return null;
-  const horizontal = shoulders.x - hips.x;
-  const vertical = shoulders.y - hips.y;
+  // Scale normalized coordinates consistently before computing an image-plane angle.
+  const horizontal = (shoulders.x - hips.x) * width;
+  const vertical = (shoulders.y - hips.y) * height;
   if (Math.hypot(horizontal, vertical) < 1e-6) return null;
 
   // Image-plane estimate relative to vertical, not a 3D biomechanical measurement.
@@ -118,6 +121,6 @@ export function calculateSquatMetrics(
       : null,
     leftKneeAngleDegrees,
     rightKneeAngleDegrees,
-    trunkLeanDegrees: calculateTrunkLeanDegrees(landmarks, confidenceThreshold),
+    trunkLeanDegrees: calculateTrunkLeanDegrees(landmarks, width, height, confidenceThreshold),
   };
 }
