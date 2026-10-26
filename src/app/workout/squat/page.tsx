@@ -3,9 +3,9 @@ import Link from "next/link";
 import { PoseCameraPanel } from "@/components/pose/pose-camera-panel";
 
 export const metadata: Metadata = {
-  title: "Live Pose Preview",
+  title: "Live Squat Analysis",
   description:
-    "Preview live pose landmarks from your camera using MediaPipe Pose Landmarker in the browser.",
+    "Track estimated bodyweight squat reps and knee-angle movement using MediaPipe Pose Landmarker in the browser.",
 };
 
 export default function SquatWorkoutPage() {
@@ -19,18 +19,18 @@ export default function SquatWorkoutPage() {
           Back to Zuhelth
         </Link>
         <span className="rounded-full border border-[#dfe5dc] bg-white px-3 py-1.5 text-xs font-semibold text-[#66736b]">
-          Stage 3 · Pose preview
+          Stage 4 · Squat analysis
         </span>
       </header>
 
       <section className="mx-auto max-w-7xl px-5 pb-16 pt-6 sm:px-8 lg:px-12 lg:pb-20">
         <div className="mb-8 max-w-3xl">
-          <p className="text-xs font-bold tracking-[0.16em] text-[#658c50]">MEDIAPIPE POSE LANDMARKER</p>
+          <p className="text-xs font-bold tracking-[0.16em] text-[#658c50]">BODYWEIGHT SQUAT ANALYSIS</p>
           <h1 className="mt-3 text-4xl font-semibold tracking-[-0.06em] text-[#18241d] sm:text-5xl">
-            See your movement.
+            Track each rep.
           </h1>
           <p className="mt-4 max-w-2xl text-base leading-7 text-[#66736b]">
-            Start your camera to detect body landmarks in real time. This preview is the foundation for exercise analysis; it does not yet assess whether a squat is correct.
+            Start your camera to track squat movement phases, count full down-and-up reps, and compare the estimated knee angle with a configurable reference threshold. This is a rule-based preview, not a complete form or safety assessment.
           </p>
         </div>
 

@@ -2,6 +2,9 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { PoseLandmarker as PoseLandmarkerInstance } from "@mediapipe/tasks-vision";
+import { SquatAnalyzer } from "@/features/squat/squat-analyzer";
+import { SquatAnalysisPanel } from "@/components/pose/squat-analysis-panel";
+import type { PoseLandmark, SquatAnalysisSnapshot } from "@/features/squat/types";
 
 const MEDIAPIPE_VERSION = "1.1.1";
 const WASM_ROOT = `https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@${MEDIAPIPE_VERSION}/wasm`;
@@ -12,12 +15,7 @@ const MIN_INFERENCE_INTERVAL_MS = 1000 / 24;
 
 type CameraStatus = "idle" | "requesting" | "loading-model" | "running" | "error";
 
-type Landmark = {
-  x: number;
-  y: number;
-  visibility?: number;
-  presence?: number;
-};
+type Landmark = PoseLandmark;
 
 const POSE_CONNECTIONS: ReadonlyArray<readonly [number, number]> = [
   [0, 11],
@@ -146,6 +144,11 @@ export function PoseCameraPanel() {
   const fpsWindowStartRef = useRef(0);
   const fpsFrameCountRef = useRef(0);
   const poseFoundRef = useRef(false);
+  const lastAnalysisUiUpdateRef = useRef(0);
+
+  const [squatAnalyzer] = useState(() => new SquatAnalyzer());
+  const [squatAnalysis, setSquatAnalysis] = useState<SquatAnalysisSnapshot>(() => squatAnalyzer.reset());
+  const squatAnalysisRef = useRef(squatAnalysis);
 
   const [status, setStatus] = useState<CameraStatus>("idle");
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
@@ -155,6 +158,27 @@ export function PoseCameraPanel() {
   const [videoSize, setVideoSize] = useState<{ width: number; height: number } | null>(
     null,
   );
+
+  const publishSquatAnalysis = (snapshot: SquatAnalysisSnapshot, now: number, force = false) => {
+    const previous = squatAnalysisRef.current;
+    const importantChange =
+      snapshot.repCount !== previous.repCount ||
+      snapshot.phase !== previous.phase ||
+      snapshot.poseQuality !== previous.poseQuality ||
+      snapshot.lastRep?.completedAt !== previous.lastRep?.completedAt;
+
+    if (force || importantChange || now - lastAnalysisUiUpdateRef.current >= 180) {
+      squatAnalysisRef.current = snapshot;
+      setSquatAnalysis(snapshot);
+      lastAnalysisUiUpdateRef.current = now;
+    }
+  };
+
+  const handleDepthTargetChange = (degrees: number) => {
+    const snapshot = squatAnalyzer.setDepthTargetDegrees(degrees);
+    squatAnalysisRef.current = snapshot;
+    setSquatAnalysis(snapshot);
+  };
 
   const releaseResources = useCallback(() => {
     if (animationFrameRef.current !== null) {
@@ -195,7 +219,11 @@ export function PoseCameraPanel() {
     setFps(0);
     setLandmarkCount(0);
     setVideoSize(null);
-  }, [releaseResources]);
+    const resetSnapshot = squatAnalyzer.reset();
+    squatAnalysisRef.current = resetSnapshot;
+    setSquatAnalysis(resetSnapshot);
+    lastAnalysisUiUpdateRef.current = 0;
+  }, [releaseResources, squatAnalyzer]);
 
   useEffect(() => {
     return () => {
@@ -213,6 +241,10 @@ export function PoseCameraPanel() {
     setFps(0);
     setLandmarkCount(0);
     setStatus("requesting");
+    const resetSnapshot = squatAnalyzer.reset();
+    squatAnalysisRef.current = resetSnapshot;
+    setSquatAnalysis(resetSnapshot);
+    lastAnalysisUiUpdateRef.current = 0;
 
     let acquiredStream: MediaStream | null = null;
     let acquiredLandmarker: PoseLandmarkerInstance | null = null;
@@ -338,6 +370,13 @@ export function PoseCameraPanel() {
               const landmarks = (result.landmarks[0] ?? []) as Landmark[];
               const visibleCount = landmarks.filter(isVisible).length;
               const hasPose = visibleCount > 0;
+              const analysisSnapshot = squatAnalyzer.analyzeFrame({
+                landmarks,
+                width: currentVideo.videoWidth,
+                height: currentVideo.videoHeight,
+                timestamp: now,
+              });
+              publishSquatAnalysis(analysisSnapshot, now);
               const context = currentCanvas.getContext("2d");
 
               if (context) {
@@ -372,6 +411,9 @@ export function PoseCameraPanel() {
                 setErrorMessage(
                   `Pose detection stopped unexpectedly. Restart the camera to try again. ${getCameraErrorMessage(error)}`,
                 );
+                const resetSnapshot = squatAnalyzer.reset();
+                squatAnalysisRef.current = resetSnapshot;
+                setSquatAnalysis(resetSnapshot);
                 setStatus("error");
               }
               return;
@@ -391,6 +433,9 @@ export function PoseCameraPanel() {
       }
 
       releaseResources();
+      const resetSnapshot = squatAnalyzer.reset();
+      squatAnalysisRef.current = resetSnapshot;
+      setSquatAnalysis(resetSnapshot);
       setErrorMessage(getCameraErrorMessage(error));
       setStatus("error");
     }
@@ -550,15 +595,20 @@ export function PoseCameraPanel() {
             </div>
           </div>
           <p className="mt-4 rounded-xl bg-[#f4f6f1] p-3 text-xs leading-5 text-[#66736b]">
-            This stage confirms pose landmarks only. It does not grade squat technique or determine whether a movement is safe.
+            The tracker estimates reps from knee-angle changes. It does not grade the full technique or determine whether a movement is safe.
           </p>
         </div>
+
+        <SquatAnalysisPanel
+          snapshot={squatAnalysis}
+          onDepthTargetChange={handleDepthTargetChange}
+        />
 
         <div className="rounded-3xl border border-[#dfe5dc] bg-[#eaf2e4] p-5 sm:p-6">
           <p className="text-xs font-bold tracking-[0.15em] text-[#49634d]">CAMERA SETUP</p>
           <h2 className="mt-2 text-lg font-semibold tracking-[-0.03em]">Help the model see your whole body</h2>
           <ul className="mt-4 space-y-3 text-sm leading-6 text-[#49634d]">
-            <li className="flex gap-2"><span aria-hidden="true">01</span><span>Place the device far enough away to show your head, hips, knees, and feet.</span></li>
+            <li className="flex gap-2"><span aria-hidden="true">01</span><span>Use a side-on camera view and keep your head, hips, knees, and ankles visible.</span></li>
             <li className="flex gap-2"><span aria-hidden="true">02</span><span>Use steady lighting and avoid strong backlighting.</span></li>
             <li className="flex gap-2"><span aria-hidden="true">03</span><span>Wear clothing that makes your body outline easy to distinguish.</span></li>
           </ul>

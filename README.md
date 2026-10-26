@@ -9,6 +9,7 @@ Zuhelth is a browser-based workout companion designed to help people review exer
 - Tailwind CSS 4 and PostCSS
 - ESLint flat config
 - MediaPipe Tasks Vision `1.1.1` for browser-based pose landmark detection
+- Vitest `3.2.4` for unit tests of geometry and the squat state machine
 
 ## Requirements
 
@@ -33,6 +34,7 @@ The live pose preview is available at [http://localhost:3000/workout/squat](http
 - `npm run start` — serve the production build
 - `npm run lint` — run ESLint
 - `npm run typecheck` — check TypeScript types without emitting files
+- `npm test` — run unit tests for angles and squat repetition analysis
 
 ## Pose preview
 
@@ -40,7 +42,7 @@ The route `/workout/squat` requests webcam permission only after the user presse
 
 The application does not upload the camera stream to its own server. The browser downloads the MediaPipe WASM runtime and model from the URLs configured in `src/components/pose/pose-camera-panel.tsx`. The runtime can send usage/performance metrics according to MediaPipe's current terms and privacy notice; review these requirements before public release.
 
-This stage only displays pose landmarks. It does not count repetitions, grade squat form, or determine whether an exercise is safe. Those rules need separate implementation and validation.
+The squat preview uses a state machine to identify standing, descending, bottom and ascending phases; it counts a rep only when the user returns to a near-standing knee angle. It estimates knee angle in the 2D image plane, applies temporal smoothing, and compares the lowest angle with a configurable threshold. Reps can be counted even when the selected target was not reached, and the UI reports that separately. Torso lean is shown only as an estimate, not graded. These heuristics are not personalized biomechanical advice and do not determine whether an exercise is safe. Use a side-on camera view and validate thresholds with a qualified coach before relying on the feedback.
 
 ## Continuous integration
 
@@ -58,10 +60,17 @@ src/
 │   └── workout/
 │       └── squat/
 │           └── page.tsx
+├── features/
+│   └── squat/
+│       ├── geometry.ts
+│       ├── squat-analyzer.ts
+│       ├── squat-analyzer.test.ts
+│       └── types.ts
 └── components/
     ├── landing/
     └── pose/
-        └── pose-camera-panel.tsx
+        ├── pose-camera-panel.tsx
+        └── squat-analysis-panel.tsx
 ```
 
 ## Privacy and safety
