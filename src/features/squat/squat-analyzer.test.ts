@@ -71,16 +71,15 @@ describe("calculateJointAngleDegrees", () => {
 
   it("rejects invalid video dimensions", () => {
     const points = [landmark(0.5, 0.25), landmark(0.5, 0.5), landmark(0.75, 0.5)];
-    expect(calculateJointAngleDegrees(...points, Number.NaN, 480)).toBeNull();
-    expect(calculateJointAngleDegrees(...points, 640, Number.POSITIVE_INFINITY)).toBeNull();
+    expect(calculateJointAngleDegrees(points[0], points[1], points[2], Number.NaN, 480)).toBeNull();
+    expect(calculateJointAngleDegrees(points[0], points[1], points[2], 640, Number.POSITIVE_INFINITY)).toBeNull();
   });
 
   it("uses the clearer side when bilateral angle estimates disagree", () => {
     const landmarks = makePose(150);
-    landmarks[28] = ankleForAngle(landmarks[26], 90, 0.5);
-    landmarks[24] = landmark(0.5, 0.4, 0.9);
-    landmarks[26] = landmark(0.5, 0.5, 0.9);
-    landmarks[28] = ankleForAngle(landmarks[26], 90, 0.9);
+    landmarks[24] = landmark(0.5, 0.4, 0.6);
+    landmarks[26] = landmark(0.5, 0.5, 0.6);
+    landmarks[28] = ankleForAngle(landmarks[26], 90, 0.6);
 
     const metrics = calculateSquatMetrics(landmarks, 640, 480);
     expect(metrics.kneeAngleDegrees).toBeCloseTo(150, 0);
