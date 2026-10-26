@@ -26,6 +26,7 @@ export interface SquatMetrics {
 export interface CompletedRep {
   number: number;
   minimumKneeAngleDegrees: number;
+  depthTargetDegrees: number;
   depthTargetMet: boolean;
   durationMs: number;
   completedAt: number;

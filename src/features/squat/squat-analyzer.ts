@@ -9,6 +9,7 @@ export interface SquatAnalyzerOptions {
   smoothingAlpha?: number;
   confidenceThreshold?: number;
   lostPoseResetMs?: number;
+  depthConfirmationFrames?: number;
 }
 
 const DEFAULT_OPTIONS: Required<SquatAnalyzerOptions> = {
@@ -19,8 +20,11 @@ const DEFAULT_OPTIONS: Required<SquatAnalyzerOptions> = {
   smoothingAlpha: 0.4,
   confidenceThreshold: 0.35,
   lostPoseResetMs: 900,
+  depthConfirmationFrames: 3,
 };
 const clamp = (value: number, min: number, max: number) => Math.min(max, Math.max(min, value));
+const clampFinite = (value: number, min: number, max: number, fallback: number) =>
+  Number.isFinite(value) ? clamp(value, min, max) : fallback;
 
 export class SquatAnalyzer {
   private readonly options: Required<SquatAnalyzerOptions>;
@@ -29,6 +33,9 @@ export class SquatAnalyzer {
   private filteredKneeAngle: number | null = null;
   private currentRepStartedAt: number | null = null;
   private currentRepMinimumAngle: number | null = null;
+  private currentRepDepthTargetDegrees: number | null = null;
+  private depthTargetConsecutiveFrames = 0;
+  private currentRepDepthTargetConfirmed = false;
   private lastValidFrameAt: number | null = null;
   private lastRep: CompletedRep | null = null;
   private latestKneeAngle: number | null = null;
@@ -37,10 +44,38 @@ export class SquatAnalyzer {
 
   constructor(options: SquatAnalyzerOptions = {}) {
     this.options = {
-      ...DEFAULT_OPTIONS,
-      ...options,
-      depthTargetDegrees: clamp(options.depthTargetDegrees ?? 110, 90, 130),
-      smoothingAlpha: clamp(options.smoothingAlpha ?? 0.4, 0.01, 1),
+      standingAngleDegrees: clampFinite(
+        options.standingAngleDegrees ?? DEFAULT_OPTIONS.standingAngleDegrees,
+        120, 180, DEFAULT_OPTIONS.standingAngleDegrees,
+      ),
+      movementStartAngleDegrees: clampFinite(
+        options.movementStartAngleDegrees ?? DEFAULT_OPTIONS.movementStartAngleDegrees,
+        90, 175, DEFAULT_OPTIONS.movementStartAngleDegrees,
+      ),
+      depthTargetDegrees: clampFinite(
+        options.depthTargetDegrees ?? DEFAULT_OPTIONS.depthTargetDegrees,
+        90, 130, DEFAULT_OPTIONS.depthTargetDegrees,
+      ),
+      reversalDeltaDegrees: clampFinite(
+        options.reversalDeltaDegrees ?? DEFAULT_OPTIONS.reversalDeltaDegrees,
+        1, 30, DEFAULT_OPTIONS.reversalDeltaDegrees,
+      ),
+      smoothingAlpha: clampFinite(
+        options.smoothingAlpha ?? DEFAULT_OPTIONS.smoothingAlpha,
+        0.01, 1, DEFAULT_OPTIONS.smoothingAlpha,
+      ),
+      confidenceThreshold: clampFinite(
+        options.confidenceThreshold ?? DEFAULT_OPTIONS.confidenceThreshold,
+        0.05, 1, DEFAULT_OPTIONS.confidenceThreshold,
+      ),
+      lostPoseResetMs: clampFinite(
+        options.lostPoseResetMs ?? DEFAULT_OPTIONS.lostPoseResetMs,
+        100, 5000, DEFAULT_OPTIONS.lostPoseResetMs,
+      ),
+      depthConfirmationFrames: Math.round(clampFinite(
+        options.depthConfirmationFrames ?? DEFAULT_OPTIONS.depthConfirmationFrames,
+        1, 6, DEFAULT_OPTIONS.depthConfirmationFrames,
+      )),
     };
   }
 
@@ -50,6 +85,9 @@ export class SquatAnalyzer {
     this.filteredKneeAngle = null;
     this.currentRepStartedAt = null;
     this.currentRepMinimumAngle = null;
+    this.currentRepDepthTargetDegrees = null;
+    this.depthTargetConsecutiveFrames = 0;
+    this.currentRepDepthTargetConfirmed = false;
     this.lastValidFrameAt = null;
     this.lastRep = null;
     this.latestKneeAngle = null;
@@ -59,24 +97,43 @@ export class SquatAnalyzer {
   }
 
   setDepthTargetDegrees(value: number): SquatAnalysisSnapshot {
-    this.options.depthTargetDegrees = clamp(Math.round(value), 90, 130);
-    return this.snapshot(null);
+    if (Number.isFinite(value)) {
+      this.options.depthTargetDegrees = clamp(Math.round(value), 90, 130);
+    }
+    return this.snapshot(this.lastValidFrameAt);
   }
 
   analyzeFrame(frame: SquatFrame): SquatAnalysisSnapshot {
+    if (!Number.isFinite(frame.timestamp)) {
+      this.poseQuality = "insufficient";
+      this.latestKneeAngle = null;
+      this.latestTrunkLean = null;
+      return this.snapshot(null);
+    }
+
     const metrics = calculateSquatMetrics(
       frame.landmarks, frame.width, frame.height, this.options.confidenceThreshold,
     );
-    if (metrics.kneeAngleDegrees === null || !Number.isFinite(frame.timestamp)) {
+    if (metrics.kneeAngleDegrees === null) {
       if (
         this.lastValidFrameAt !== null &&
         frame.timestamp - this.lastValidFrameAt >= this.options.lostPoseResetMs &&
-        this.phase !== "standing" && this.phase !== "awaiting_standing"
+        this.phase !== "awaiting_standing"
       ) {
+        // Do not resume halfway through a rep after losing the pose for too long.
         this.resetTransientRep();
         this.phase = "awaiting_standing";
         this.filteredKneeAngle = null;
+        this.lastValidFrameAt = null;
       }
+      this.poseQuality = "insufficient";
+      this.latestKneeAngle = null;
+      this.latestTrunkLean = null;
+      return this.snapshot(frame.timestamp);
+    }
+
+    // Ignore out-of-order timestamps rather than letting them corrupt rep duration/state.
+    if (this.lastValidFrameAt !== null && frame.timestamp < this.lastValidFrameAt) {
       this.poseQuality = "insufficient";
       this.latestKneeAngle = null;
       this.latestTrunkLean = null;
@@ -90,9 +147,33 @@ export class SquatAnalyzer {
       ? metrics.kneeAngleDegrees
       : this.filteredKneeAngle + this.options.smoothingAlpha *
         (metrics.kneeAngleDegrees - this.filteredKneeAngle);
-    this.latestKneeAngle = this.filteredKneeAngle;
-    this.updateStateMachine(this.filteredKneeAngle, frame.timestamp);
+    this.latestKneeAngle = Number.isFinite(this.filteredKneeAngle)
+      ? this.filteredKneeAngle
+      : null;
+
+    if (this.latestKneeAngle === null) {
+      this.filteredKneeAngle = null;
+      this.poseQuality = "insufficient";
+      return this.snapshot(frame.timestamp);
+    }
+
+    this.updateStateMachine(this.latestKneeAngle, frame.timestamp);
     return this.snapshot(frame.timestamp);
+  }
+
+  private getCurrentRepDepthTarget(): number {
+    return this.currentRepDepthTargetDegrees ?? this.options.depthTargetDegrees;
+  }
+
+  private updateDepthTargetConfirmation(angle: number): void {
+    if (angle <= this.getCurrentRepDepthTarget()) {
+      this.depthTargetConsecutiveFrames += 1;
+      if (this.depthTargetConsecutiveFrames >= this.options.depthConfirmationFrames) {
+        this.currentRepDepthTargetConfirmed = true;
+      }
+    } else {
+      this.depthTargetConsecutiveFrames = 0;
+    }
   }
 
   private updateStateMachine(angle: number, timestamp: number): void {
@@ -105,31 +186,38 @@ export class SquatAnalyzer {
           this.phase = "descending";
           this.currentRepStartedAt = timestamp;
           this.currentRepMinimumAngle = angle;
+          this.currentRepDepthTargetDegrees = this.options.depthTargetDegrees;
+          this.depthTargetConsecutiveFrames = 0;
+          this.currentRepDepthTargetConfirmed = false;
         }
         return;
       case "descending":
         this.updateRepMinimum(angle);
-        if (angle <= this.options.depthTargetDegrees) {
+        this.updateDepthTargetConfirmation(angle);
+        if (this.currentRepDepthTargetConfirmed) {
           this.phase = "bottom";
         } else if (
           this.currentRepMinimumAngle !== null &&
           angle >= this.currentRepMinimumAngle + this.options.reversalDeltaDegrees
         ) {
-          // Count a complete down/up motion even when it did not reach the depth threshold.
+          // A brief noisy dip is not enough to confirm the selected depth target.
           this.phase = "ascending";
         }
         return;
       case "bottom":
         this.updateRepMinimum(angle);
+        this.updateDepthTargetConfirmation(angle);
         if (
           this.currentRepMinimumAngle !== null &&
           angle >= this.currentRepMinimumAngle + this.options.reversalDeltaDegrees
         ) this.phase = "ascending";
         return;
       case "ascending":
-        if (this.currentRepMinimumAngle !== null && angle < this.currentRepMinimumAngle - 3) {
-          this.currentRepMinimumAngle = angle;
-          if (angle <= this.options.depthTargetDegrees) this.phase = "bottom";
+        this.updateRepMinimum(angle);
+        this.updateDepthTargetConfirmation(angle);
+        if (this.currentRepDepthTargetConfirmed && angle <= this.getCurrentRepDepthTarget()) {
+          this.phase = "bottom";
+          return;
         }
         if (angle >= this.options.standingAngleDegrees) {
           this.completeRep(timestamp);
@@ -148,7 +236,8 @@ export class SquatAnalyzer {
   private completeRep(timestamp: number): void {
     const minimumAngle = this.currentRepMinimumAngle;
     const startedAt = this.currentRepStartedAt;
-    if (minimumAngle === null || startedAt === null) {
+    const repDepthTarget = this.currentRepDepthTargetDegrees;
+    if (minimumAngle === null || startedAt === null || repDepthTarget === null) {
       this.resetTransientRep();
       return;
     }
@@ -156,7 +245,8 @@ export class SquatAnalyzer {
     this.lastRep = {
       number: this.repCount,
       minimumKneeAngleDegrees: minimumAngle,
-      depthTargetMet: minimumAngle <= this.options.depthTargetDegrees,
+      depthTargetDegrees: repDepthTarget,
+      depthTargetMet: this.currentRepDepthTargetConfirmed,
       durationMs: Math.max(0, timestamp - startedAt),
       completedAt: timestamp,
     };
@@ -166,6 +256,9 @@ export class SquatAnalyzer {
   private resetTransientRep(): void {
     this.currentRepStartedAt = null;
     this.currentRepMinimumAngle = null;
+    this.currentRepDepthTargetDegrees = null;
+    this.depthTargetConsecutiveFrames = 0;
+    this.currentRepDepthTargetConfirmed = false;
   }
 
   private snapshot(timestamp: number | null): SquatAnalysisSnapshot {
@@ -181,10 +274,10 @@ export class SquatAnalyzer {
           instruction = "Ready. Begin your squat with a controlled descent.";
           break;
         case "descending":
-          instruction = `Lower under control. The current knee-angle target is ≤ ${this.options.depthTargetDegrees}°.`;
+          instruction = `Lower under control. The current rep uses a target of ≤ ${this.getCurrentRepDepthTarget()}°.`;
           break;
         case "bottom":
-          instruction = "The configured depth target is reached. Begin standing up under control.";
+          instruction = "The configured depth target has been confirmed across multiple frames. Begin standing up under control.";
           break;
         case "ascending":
           instruction = "Keep standing until your knees return near straight to complete the rep.";
