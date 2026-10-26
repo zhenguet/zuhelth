@@ -8,6 +8,7 @@ Zuhelth is a browser-based workout companion designed to help people review exer
 - TypeScript with strict checking
 - Tailwind CSS 4
 - ESLint flat config
+- PostCSS with the Tailwind CSS PostCSS plugin
 - MediaPipe Pose Landmarker is planned for a later milestone; it is not wired into the current scaffold
 
 ## Requirements
@@ -31,6 +32,10 @@ Open [http://localhost:3000](http://localhost:3000).
 - `npm run start` — serve the production build
 - `npm run lint` — run ESLint
 - `npm run typecheck` — check TypeScript types without emitting files
+
+## Continuous integration
+
+GitHub Actions runs dependency installation, ESLint, TypeScript checking, and a production build on pushes and pull requests targeting `master`. The first workflow run also uploads the generated npm lockfile as a short-lived artifact so it can be committed to the repository.
 
 ## Current scope
 
