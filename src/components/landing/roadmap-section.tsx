@@ -24,12 +24,12 @@ export function RoadmapSection() {
           <span className="text-xs font-semibold text-[#49634d]">Complete</span>
         </li>
         <li className="flex items-start gap-4 py-5">
-          <span className="mt-0.5 grid h-7 w-7 shrink-0 place-items-center rounded-full border border-[#dfe5dc] text-xs font-semibold">03</span>
+          <span className="mt-0.5 grid h-7 w-7 shrink-0 place-items-center rounded-full bg-[#e7f2df] text-xs font-semibold text-[#31563a]">03</span>
           <div className="flex-1">
             <p className="font-semibold">03 · Camera and pose landmarks</p>
-            <p className="mt-1 text-sm leading-6 text-[#66736b]">Connect webcam input to MediaPipe and draw the pose overlay.</p>
+            <p className="mt-1 text-sm leading-6 text-[#66736b]">Webcam preview, MediaPipe inference, and the live pose overlay are implemented.</p>
           </div>
-          <span className="text-xs text-[#66736b]">Next</span>
+          <span className="text-xs font-semibold text-[#49634d]">Try locally</span>
         </li>
         <li className="flex items-start gap-4 py-5">
           <span className="mt-0.5 grid h-7 w-7 shrink-0 place-items-center rounded-full border border-[#dfe5dc] text-xs font-semibold">04</span>
