@@ -19,11 +19,13 @@ Zuhelth is a browser-based workout companion designed to help people review exer
 ## Getting started
 
 ```bash
-npm install
+npm ci
 npm run dev
 ```
 
 Open [http://localhost:3000](http://localhost:3000).
+
+When dependencies change, update them with `npm install <package>` and commit the resulting `package.json` and `package-lock.json` together. Use `npm ci` for clean, reproducible installs.
 
 ## Scripts
 
@@ -35,7 +37,7 @@ Open [http://localhost:3000](http://localhost:3000).
 
 ## Continuous integration
 
-GitHub Actions runs dependency installation, ESLint, TypeScript checking, and a production build on pushes and pull requests targeting `master`. The first workflow run also uploads the generated npm lockfile as a short-lived artifact so it can be committed to the repository.
+GitHub Actions runs dependency installation, ESLint, TypeScript checking, and a production build on pushes and pull requests targeting `master`. On the initial push only, the workflow commits the generated npm lockfile after all validation steps pass. Subsequent runs use `npm ci`.
 
 ## Current scope
 
