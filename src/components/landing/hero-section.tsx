@@ -17,13 +17,12 @@ export function HeroSection() {
           Zuhelth is being built as a camera-first workout companion to help you understand your movement, review technique criteria, and make each set more intentional.
         </p>
         <div className="mt-9 flex flex-wrap items-center gap-3">
-          <a href="#how-it-works" className="inline-flex min-h-12 items-center justify-center gap-2 rounded-full bg-[#203a27] px-6 text-sm font-semibold text-white transition hover:bg-[#31563a]">
-            Explore the approach <ArrowUpRight />
+          <a href="/workout/squat" className="inline-flex min-h-12 items-center justify-center gap-2 rounded-full bg-[#203a27] px-6 text-sm font-semibold text-white transition hover:bg-[#31563a]">
+            Try live pose preview <ArrowUpRight />
           </a>
-          <span className="inline-flex min-h-12 items-center gap-2 px-2 text-sm text-[#66736b]">
-            <span className="h-2 w-2 rounded-full bg-[#d2a64d]" />
-            Foundation phase
-          </span>
+          <a href="#how-it-works" className="inline-flex min-h-12 items-center justify-center rounded-full border border-[#dfe5dc] bg-white/65 px-5 text-sm font-semibold text-[#203a27] transition hover:bg-white">
+            How it works
+          </a>
         </div>
         <div className="mt-12 grid max-w-lg grid-cols-3 border-t border-[#dfe5dc] pt-5">
           <div className="pr-3">
@@ -50,7 +49,7 @@ export function HeroSection() {
               <p className="text-xs font-semibold tracking-[0.12em] text-[#b9f36d]">MOVEMENT LAB</p>
               <p className="mt-1 text-sm text-white/80">Squat form check</p>
             </div>
-            <span className="rounded-full border border-white/15 bg-white/5 px-3 py-1.5 text-[11px] font-medium text-white/65">Preview only</span>
+            <span className="rounded-full border border-white/15 bg-white/5 px-3 py-1.5 text-[11px] font-medium text-white/65">Illustration</span>
           </div>
           <div className="relative flex min-h-[300px] items-center justify-center sm:min-h-[340px]">
             <div className="absolute left-3 top-5 rounded-xl border border-white/10 bg-white/[0.06] px-3 py-2 backdrop-blur">
@@ -60,25 +59,25 @@ export function HeroSection() {
             <PoseIllustration />
             <div className="absolute bottom-4 right-2 rounded-xl border border-white/10 bg-[#243d2c]/95 px-3 py-2.5 backdrop-blur sm:right-3">
               <p className="text-[10px] uppercase tracking-[0.13em] text-white/45">Pose detection</p>
-              <p className="mt-1 flex items-center gap-2 text-sm font-medium text-white"><span className="h-1.5 w-1.5 rounded-full bg-[#d2a64d]" /> Planned next phase</p>
+              <p className="mt-1 flex items-center gap-2 text-sm font-medium text-white"><span className="h-1.5 w-1.5 rounded-full bg-[#d2a64d]" /> Available in preview</p>
             </div>
           </div>
           <div className="relative grid grid-cols-3 gap-2 border-t border-white/10 pt-4">
             <div className="rounded-xl bg-white/[0.06] p-3">
               <p className="text-[10px] uppercase tracking-[0.1em] text-white/45">Rep counter</p>
-              <p className="mt-1 text-sm font-medium text-white">Planned</p>
+              <p className="mt-1 text-sm font-medium text-white">Next stage</p>
             </div>
             <div className="rounded-xl bg-white/[0.06] p-3">
               <p className="text-[10px] uppercase tracking-[0.1em] text-white/45">Joint angles</p>
-              <p className="mt-1 text-sm font-medium text-white">Planned</p>
+              <p className="mt-1 text-sm font-medium text-white">Next stage</p>
             </div>
             <div className="rounded-xl bg-white/[0.06] p-3">
               <p className="text-[10px] uppercase tracking-[0.1em] text-white/45">Live feedback</p>
-              <p className="mt-1 text-sm font-medium text-white">Planned</p>
+              <p className="mt-1 text-sm font-medium text-white">Next stage</p>
             </div>
           </div>
         </div>
-        <p className="mt-3 px-2 text-xs leading-5 text-[#66736b]">Illustrative concept only. This screen does not access your camera or evaluate exercise form yet.</p>
+        <p className="mt-3 px-2 text-xs leading-5 text-[#66736b]">The landing illustration is static. Open the live preview to test your camera and pose landmarks.</p>
       </div>
     </section>
   );
