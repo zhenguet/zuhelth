@@ -100,7 +100,7 @@ export class SquatAnalyzer {
     if (Number.isFinite(value)) {
       this.options.depthTargetDegrees = clamp(Math.round(value), 90, 130);
     }
-    return this.snapshot(null);
+    return this.snapshot(this.lastValidFrameAt);
   }
 
   analyzeFrame(frame: SquatFrame): SquatAnalysisSnapshot {
