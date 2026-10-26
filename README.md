@@ -1,6 +1,14 @@
 # Zuhelth — Gym Form Checker
 
-A browser-based gym form checker. The initial milestone establishes the Next.js application foundation; pose detection and exercise analysis will be added in later milestones.
+Zuhelth is a browser-based workout companion designed to help people review exercise technique. The first release will focus on bodyweight squat analysis using pose landmarks and explicit, testable criteria.
+
+## Technology
+
+- Next.js App Router and React
+- TypeScript with strict checking
+- Tailwind CSS 4
+- ESLint flat config
+- MediaPipe Pose Landmarker is planned for a later milestone; it is not wired into the current scaffold
 
 ## Requirements
 
@@ -16,7 +24,7 @@ npm run dev
 
 Open [http://localhost:3000](http://localhost:3000).
 
-## Available scripts
+## Scripts
 
 - `npm run dev` — start the local development server
 - `npm run build` — create a production build
@@ -24,7 +32,11 @@ Open [http://localhost:3000](http://localhost:3000).
 - `npm run lint` — run ESLint
 - `npm run typecheck` — check TypeScript types without emitting files
 
-## Project milestones
+## Current scope
+
+The current page is a static product scaffold. It does not request camera access, run pose detection, score exercise form, or save workout history. Those capabilities will be added after the foundation is validated.
+
+## Planned milestones
 
 1. Repository and architecture review
 2. Application scaffold and developer tooling
@@ -33,6 +45,17 @@ Open [http://localhost:3000](http://localhost:3000).
 5. Live feedback, workout summary, and local history
 6. Validation and deployment
 
-## Scope of this scaffold
+## Project layout
 
-The app processes no camera video yet and does not provide exercise-safety or medical assessments. Camera processing and pose analysis will be introduced and validated in later milestones.
+```text
+src/
+└── app/
+    ├── globals.css   # Tailwind import and global design tokens
+    ├── icon.svg      # App icon
+    ├── layout.tsx    # Root layout and metadata
+    └── page.tsx      # Initial landing page
+```
+
+## Privacy and safety direction
+
+The intended MVP architecture processes camera frames in the browser and avoids uploading raw video by default. The app is a technique-review aid, not a medical or safety assessment. Implementation details and model licensing will be reviewed during the MediaPipe integration milestone.
