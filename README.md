@@ -56,11 +56,21 @@ The current page is a static product scaffold. It does not request camera access
 
 ```text
 src/
-└── app/
-    ├── globals.css   # Tailwind import and global design tokens
-    ├── icon.svg      # App icon
-    ├── layout.tsx    # Root layout and metadata
-    └── page.tsx      # Initial landing page
+├── app/
+│   ├── globals.css
+│   ├── icon.svg
+│   ├── layout.tsx
+│   └── page.tsx
+└── components/
+    └── landing/
+        ├── approach-section.tsx
+        ├── arrow-up-right.tsx
+        ├── brand-mark.tsx
+        ├── hero-section.tsx
+        ├── pose-illustration.tsx
+        ├── roadmap-section.tsx
+        ├── site-footer.tsx
+        └── site-header.tsx
 ```
 
 ## Privacy and safety direction
