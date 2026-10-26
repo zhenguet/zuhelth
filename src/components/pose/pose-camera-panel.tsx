@@ -336,7 +336,8 @@ export function PoseCameraPanel() {
             try {
               const result = currentLandmarker.detectForVideo(currentVideo, now);
               const landmarks = (result.landmarks[0] ?? []) as Landmark[];
-              const hasPose = landmarks.length > 0;
+              const visibleCount = landmarks.filter(isVisible).length;
+              const hasPose = visibleCount > 0;
               const context = currentCanvas.getContext("2d");
 
               if (context) {
@@ -353,7 +354,7 @@ export function PoseCameraPanel() {
                 setPoseFound(hasPose);
               }
 
-              setLandmarkCount(landmarks.length);
+              setLandmarkCount(visibleCount);
               lastVideoTimeRef.current = currentVideo.currentTime;
               lastInferenceTimeRef.current = now;
               fpsFrameCountRef.current += 1;
@@ -525,7 +526,7 @@ export function PoseCameraPanel() {
           <p className="text-xs leading-5 text-[#66736b]">
             {status === "running"
               ? "Camera is active. Stop it when you finish."
-              : "Video is processed in this browser and is not uploaded by this feature."}
+              : "Camera frames stay in this browser. MediaPipe may send usage/performance metrics as described in its privacy notice."}
           </p>
         </div>
       </div>

@@ -37,7 +37,7 @@ export default function SquatWorkoutPage() {
         <PoseCameraPanel />
 
         <p className="mt-6 max-w-4xl text-xs leading-5 text-[#66736b]">
-          Privacy note: this feature processes video frames in the browser and does not upload the camera stream to the app server. The MediaPipe runtime and model are downloaded from their configured public asset hosts when needed. Check the project privacy notice and relevant MediaPipe terms before public release.
+          Privacy note: this feature processes video frames in the browser and does not upload the camera stream to the app server. The MediaPipe runtime and model are downloaded from their configured public asset hosts, and MediaPipe may send usage/performance metrics under its privacy notice. Review the relevant terms before public release.
         </p>
       </section>
     </main>
