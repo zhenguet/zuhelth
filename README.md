@@ -42,16 +42,18 @@ The route `/workout/squat` requests webcam permission only after the user presse
 
 The application does not upload the camera stream to its own server. The browser downloads the MediaPipe WASM runtime and model from the URLs configured in `src/components/pose/pose-camera-panel.tsx`. The runtime can send usage/performance metrics according to MediaPipe's current terms and privacy notice; review these requirements before public release.
 
-The squat preview uses a state machine to identify standing, descending, bottom and ascending phases; it counts a rep only when the user returns to a near-standing knee angle. It estimates knee angle in the 2D image plane, applies temporal smoothing, and compares the lowest angle with a configurable threshold. Reps can be counted even when the selected target was not reached, and the UI reports that separately. Torso lean is shown only as an estimate, not graded. These heuristics are not personalized biomechanical advice and do not determine whether an exercise is safe. Use a side-on camera view and validate thresholds with a qualified coach before relying on the feedback.
+The squat preview uses a state machine to identify standing, descending, bottom and ascending phases; it counts a rep only when the user returns to a near-standing knee angle. It estimates knee angle in the 2D image plane, applies temporal smoothing, selects a clearer leg when bilateral estimates disagree substantially, and avoids producing an aggregate angle when disagreement is ambiguous. A rep's depth target is fixed when the rep starts and must be seen across consecutive frames before it is marked reached. Reps can still be counted when the selected target was not confirmed, and the UI reports that separately. Prolonged pose loss resets an incomplete rep and requires standing calibration again. Torso lean is shown only as an estimate, not graded. These heuristics are not personalized biomechanical advice and do not determine whether an exercise is safe. Use a side-on camera view and validate thresholds with a qualified coach before relying on the feedback.
 
 ## Squat analysis and test coverage
 
 The initial unit tests cover:
 - Joint-angle calculations in pixel space, including non-square camera frames
-- Rejection of low-confidence and degenerate landmarks
-- Full squat rep counting and target-depth classification
-- Counting a shallow rep while reporting that the configured target was missed
-- Missing landmarks, target-threshold clamping, and session reset
+- Rejection of low-confidence, degenerate, and invalid-dimension inputs
+- Choosing the clearer side or rejecting ambiguous bilateral knee-angle disagreement
+- Full squat rep counting with consecutive-frame depth confirmation
+- Counting a shallow rep and rejecting a one-frame noisy depth dip
+- Locking the depth threshold for an active rep
+- Missing landmarks, prolonged pose loss, target-threshold clamping, and session reset
 
 The current thresholds are heuristics for a side-view camera and should be validated with a qualified coach before public use. A passing unit test checks the code's logic, not real-world biomechanical accuracy.
 

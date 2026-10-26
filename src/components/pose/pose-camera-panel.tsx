@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { PoseLandmarker as PoseLandmarkerInstance } from "@mediapipe/tasks-vision";
+import { isReliableLandmark } from "@/features/squat/geometry";
 import { SquatAnalyzer } from "@/features/squat/squat-analyzer";
 import { SquatAnalysisPanel } from "@/components/pose/squat-analysis-panel";
 import type { PoseLandmark, SquatAnalysisSnapshot } from "@/features/squat/types";
@@ -49,12 +50,7 @@ const POSE_CONNECTIONS: ReadonlyArray<readonly [number, number]> = [
 ];
 
 function isVisible(landmark: Landmark | undefined): landmark is Landmark {
-  return Boolean(
-    landmark &&
-      Number.isFinite(landmark.x) &&
-      Number.isFinite(landmark.y) &&
-      (landmark.visibility ?? 1) >= VISIBILITY_THRESHOLD,
-  );
+  return isReliableLandmark(landmark, VISIBILITY_THRESHOLD);
 }
 
 function drawPose(

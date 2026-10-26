@@ -7,6 +7,9 @@ export const LANDMARK_INDEX = {
   leftAnkle: 27, rightAnkle: 28,
 } as const;
 
+const MAX_SIDE_ANGLE_DIFFERENCE_DEGREES = 25;
+const MIN_CONFIDENCE_ADVANTAGE = 0.15;
+
 function confidenceOf(landmark: PoseLandmark): number {
   const values = [landmark.visibility, landmark.presence].filter(
     (value): value is number => typeof value === "number" && Number.isFinite(value),
@@ -22,6 +25,7 @@ export function isReliableLandmark(
     landmark &&
       Number.isFinite(landmark.x) &&
       Number.isFinite(landmark.y) &&
+      Number.isFinite(threshold) &&
       confidenceOf(landmark) >= threshold,
   );
 }
@@ -35,6 +39,7 @@ export function calculateJointAngleDegrees(
   confidenceThreshold = 0.35,
 ): number | null {
   if (
+    !Number.isFinite(width) || !Number.isFinite(height) ||
     width <= 0 || height <= 0 ||
     !isReliableLandmark(a, confidenceThreshold) ||
     !isReliableLandmark(b, confidenceThreshold) ||
@@ -49,10 +54,14 @@ export function calculateJointAngleDegrees(
   const cbx = cx - bx, cby = cy - by;
   const abLength = Math.hypot(abx, aby);
   const cbLength = Math.hypot(cbx, cby);
-  if (abLength < 1e-6 || cbLength < 1e-6) return null;
+  if (
+    !Number.isFinite(abLength) || !Number.isFinite(cbLength) ||
+    abLength < 1e-6 || cbLength < 1e-6
+  ) return null;
 
   const cosine = (abx * cbx + aby * cby) / (abLength * cbLength);
-  return Math.acos(Math.max(-1, Math.min(1, cosine))) * 180 / Math.PI;
+  const angle = Math.acos(Math.max(-1, Math.min(1, cosine))) * 180 / Math.PI;
+  return Number.isFinite(angle) ? angle : null;
 }
 
 function getLandmark(landmarks: readonly PoseLandmark[], index: number) {
@@ -88,10 +97,71 @@ function calculateTrunkLeanDegrees(
   // Scale normalized coordinates consistently before computing an image-plane angle.
   const horizontal = (shoulders.x - hips.x) * width;
   const vertical = (shoulders.y - hips.y) * height;
-  if (Math.hypot(horizontal, vertical) < 1e-6) return null;
+  if (!Number.isFinite(horizontal) || !Number.isFinite(vertical) ||
+      Math.hypot(horizontal, vertical) < 1e-6) return null;
 
   // Image-plane estimate relative to vertical, not a 3D biomechanical measurement.
-  return Math.atan2(Math.abs(horizontal), Math.abs(vertical)) * 180 / Math.PI;
+  const angle = Math.atan2(Math.abs(horizontal), Math.abs(vertical)) * 180 / Math.PI;
+  return Number.isFinite(angle) ? angle : null;
+}
+
+interface SideKneeAngle {
+  angle: number | null;
+  confidence: number | null;
+}
+
+function calculateSideKneeAngle(
+  landmarks: readonly PoseLandmark[],
+  hipIndex: number,
+  kneeIndex: number,
+  ankleIndex: number,
+  width: number,
+  height: number,
+  confidenceThreshold: number,
+): SideKneeAngle {
+  const hip = getLandmark(landmarks, hipIndex);
+  const knee = getLandmark(landmarks, kneeIndex);
+  const ankle = getLandmark(landmarks, ankleIndex);
+  const angle = calculateJointAngleDegrees(
+    hip, knee, ankle, width, height, confidenceThreshold,
+  );
+  if (
+    angle === null ||
+    !isReliableLandmark(hip, confidenceThreshold) ||
+    !isReliableLandmark(knee, confidenceThreshold) ||
+    !isReliableLandmark(ankle, confidenceThreshold)
+  ) {
+    return { angle: null, confidence: null };
+  }
+
+  return {
+    angle,
+    confidence: Math.min(confidenceOf(hip), confidenceOf(knee), confidenceOf(ankle)),
+  };
+}
+
+function selectKneeAngle(
+  left: SideKneeAngle,
+  right: SideKneeAngle,
+): number | null {
+  if (left.angle === null) return right.angle;
+  if (right.angle === null) return left.angle;
+  if (left.confidence === null || right.confidence === null) return null;
+
+  const confidenceDifference = Math.abs(left.confidence - right.confidence);
+  if (Math.abs(left.angle - right.angle) > MAX_SIDE_ANGLE_DIFFERENCE_DEGREES) {
+    // Prefer one side only when its hip/knee/ankle landmarks are meaningfully clearer.
+    // If confidence is similar, disagreement is ambiguous; do not manufacture an average.
+    if (confidenceDifference < MIN_CONFIDENCE_ADVANTAGE) return null;
+    return left.confidence > right.confidence ? left.angle : right.angle;
+  }
+
+  // When the two estimates agree, prefer a confidence-weighted average.
+  const totalWeight = left.confidence + right.confidence;
+  if (totalWeight <= 0) return null;
+  return (
+    left.angle * left.confidence + right.angle * right.confidence
+  ) / totalWeight;
 }
 
 export function calculateSquatMetrics(
@@ -100,27 +170,31 @@ export function calculateSquatMetrics(
   height: number,
   confidenceThreshold = 0.35,
 ): SquatMetrics {
-  const leftKneeAngleDegrees = calculateJointAngleDegrees(
-    getLandmark(landmarks, LANDMARK_INDEX.leftHip),
-    getLandmark(landmarks, LANDMARK_INDEX.leftKnee),
-    getLandmark(landmarks, LANDMARK_INDEX.leftAnkle),
-    width, height, confidenceThreshold,
+  if (
+    !Number.isFinite(width) || !Number.isFinite(height) ||
+    width <= 0 || height <= 0
+  ) {
+    return {
+      kneeAngleDegrees: null,
+      leftKneeAngleDegrees: null,
+      rightKneeAngleDegrees: null,
+      trunkLeanDegrees: null,
+    };
+  }
+
+  const left = calculateSideKneeAngle(
+    landmarks, LANDMARK_INDEX.leftHip, LANDMARK_INDEX.leftKnee,
+    LANDMARK_INDEX.leftAnkle, width, height, confidenceThreshold,
   );
-  const rightKneeAngleDegrees = calculateJointAngleDegrees(
-    getLandmark(landmarks, LANDMARK_INDEX.rightHip),
-    getLandmark(landmarks, LANDMARK_INDEX.rightKnee),
-    getLandmark(landmarks, LANDMARK_INDEX.rightAnkle),
-    width, height, confidenceThreshold,
+  const right = calculateSideKneeAngle(
+    landmarks, LANDMARK_INDEX.rightHip, LANDMARK_INDEX.rightKnee,
+    LANDMARK_INDEX.rightAnkle, width, height, confidenceThreshold,
   );
-  const available = [leftKneeAngleDegrees, rightKneeAngleDegrees].filter(
-    (angle): angle is number => angle !== null,
-  );
+
   return {
-    kneeAngleDegrees: available.length
-      ? available.reduce((sum, angle) => sum + angle, 0) / available.length
-      : null,
-    leftKneeAngleDegrees,
-    rightKneeAngleDegrees,
+    kneeAngleDegrees: selectKneeAngle(left, right),
+    leftKneeAngleDegrees: left.angle,
+    rightKneeAngleDegrees: right.angle,
     trunkLeanDegrees: calculateTrunkLeanDegrees(landmarks, width, height, confidenceThreshold),
   };
 }

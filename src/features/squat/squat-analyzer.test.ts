@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { calculateJointAngleDegrees } from "./geometry";
+import { calculateJointAngleDegrees, calculateSquatMetrics } from "./geometry";
 import { SquatAnalyzer } from "./squat-analyzer";
 import type { PoseLandmark, SquatFrame } from "./types";
 
@@ -7,32 +7,46 @@ function landmark(x: number, y: number, visibility = 1): PoseLandmark {
   return { x, y, visibility, presence: visibility };
 }
 
-function makePose(kneeAngleDegrees: number): PoseLandmark[] {
-  const landmarks = Array.from({ length: 33 }, () => landmark(0.5, 0.5, 0));
-  const hip = landmark(0.5, 0.4);
-  const knee = landmark(0.5, 0.5);
-  const directionDegrees = -90 + kneeAngleDegrees;
+function ankleForAngle(knee: PoseLandmark, angleDegrees: number, visibility = 1): PoseLandmark {
+  const directionDegrees = -90 + angleDegrees;
   const directionRadians = (directionDegrees * Math.PI) / 180;
-  // Construct the synthetic vector in pixels, then convert each axis to normalized coordinates.
   const radiusPixels = 48;
-  const ankle = landmark(
+  return landmark(
     knee.x + (radiusPixels * Math.cos(directionRadians)) / 640,
     knee.y + (radiusPixels * Math.sin(directionRadians)) / 480,
+    visibility,
   );
+}
+
+function makePose(kneeAngleDegrees: number): PoseLandmark[] {
+  const landmarks = Array.from({ length: 33 }, () => landmark(0.5, 0.5, 0));
+  const leftHip = landmark(0.5, 0.4);
+  const rightHip = landmark(0.5, 0.4);
+  const leftKnee = landmark(0.5, 0.5);
+  const rightKnee = landmark(0.5, 0.5);
 
   landmarks[11] = landmark(0.5, 0.18);
   landmarks[12] = landmark(0.5, 0.18);
-  landmarks[23] = hip;
-  landmarks[24] = hip;
-  landmarks[25] = knee;
-  landmarks[26] = knee;
-  landmarks[27] = ankle;
-  landmarks[28] = ankle;
+  landmarks[23] = leftHip;
+  landmarks[24] = rightHip;
+  landmarks[25] = leftKnee;
+  landmarks[26] = rightKnee;
+  landmarks[27] = ankleForAngle(leftKnee, kneeAngleDegrees);
+  landmarks[28] = ankleForAngle(rightKnee, kneeAngleDegrees);
   return landmarks;
 }
 
 function frame(kneeAngleDegrees: number, timestamp: number): SquatFrame {
   return { landmarks: makePose(kneeAngleDegrees), width: 640, height: 480, timestamp };
+}
+
+function lostPoseFrame(timestamp: number): SquatFrame {
+  return {
+    landmarks: Array.from({ length: 33 }, () => landmark(0.5, 0.5, 0)),
+    width: 640,
+    height: 480,
+    timestamp,
+  };
 }
 
 describe("calculateJointAngleDegrees", () => {
@@ -54,20 +68,49 @@ describe("calculateJointAngleDegrees", () => {
     const point = landmark(0.5, 0.5);
     expect(calculateJointAngleDegrees(point, point, landmark(0.7, 0.5), 640, 480)).toBeNull();
   });
+
+  it("rejects invalid video dimensions", () => {
+    const points = [landmark(0.5, 0.25), landmark(0.5, 0.5), landmark(0.75, 0.5)];
+    expect(calculateJointAngleDegrees(...points, Number.NaN, 480)).toBeNull();
+    expect(calculateJointAngleDegrees(...points, 640, Number.POSITIVE_INFINITY)).toBeNull();
+  });
+
+  it("uses the clearer side when bilateral angle estimates disagree", () => {
+    const landmarks = makePose(150);
+    landmarks[28] = ankleForAngle(landmarks[26], 90, 0.5);
+    landmarks[24] = landmark(0.5, 0.4, 0.9);
+    landmarks[26] = landmark(0.5, 0.5, 0.9);
+    landmarks[28] = ankleForAngle(landmarks[26], 90, 0.9);
+
+    const metrics = calculateSquatMetrics(landmarks, 640, 480);
+    expect(metrics.kneeAngleDegrees).toBeCloseTo(150, 0);
+  });
+
+  it("returns no aggregate angle when bilateral estimates disagree with similar confidence", () => {
+    const landmarks = makePose(150);
+    landmarks[28] = ankleForAngle(landmarks[26], 90);
+    const metrics = calculateSquatMetrics(landmarks, 640, 480);
+    expect(metrics.leftKneeAngleDegrees).toBeCloseTo(150, 0);
+    expect(metrics.rightKneeAngleDegrees).toBeCloseTo(90, 0);
+    expect(metrics.kneeAngleDegrees).toBeNull();
+  });
 });
 
 describe("SquatAnalyzer", () => {
-  it("counts a complete rep and checks the configured depth threshold", () => {
+  it("counts a complete rep after confirming the target over consecutive frames", () => {
     const analyzer = new SquatAnalyzer({ smoothingAlpha: 1, depthTargetDegrees: 110 });
     expect(analyzer.analyzeFrame(frame(170, 0)).phase).toBe("standing");
     expect(analyzer.analyzeFrame(frame(150, 200)).phase).toBe("descending");
-    expect(analyzer.analyzeFrame(frame(100, 600)).phase).toBe("bottom");
+    expect(analyzer.analyzeFrame(frame(100, 600)).phase).toBe("descending");
+    expect(analyzer.analyzeFrame(frame(102, 700)).phase).toBe("descending");
+    expect(analyzer.analyzeFrame(frame(101, 800)).phase).toBe("bottom");
     expect(analyzer.analyzeFrame(frame(120, 900)).phase).toBe("ascending");
     expect(analyzer.analyzeFrame(frame(145, 1200)).repCount).toBe(0);
     const completed = analyzer.analyzeFrame(frame(165, 1600));
     expect(completed.phase).toBe("standing");
     expect(completed.repCount).toBe(1);
     expect(completed.lastRep?.depthTargetMet).toBe(true);
+    expect(completed.lastRep?.depthTargetDegrees).toBe(110);
     expect(completed.lastRep?.minimumKneeAngleDegrees).toBeCloseTo(100, 0);
   });
 
@@ -84,21 +127,62 @@ describe("SquatAnalyzer", () => {
     expect(completed.lastRep?.minimumKneeAngleDegrees).toBeCloseTo(140, 0);
   });
 
-  it("does not calculate or count when required landmarks are not visible", () => {
-    const analyzer = new SquatAnalyzer({ smoothingAlpha: 1 });
+  it("does not count a one-frame noisy dip as confirmed depth", () => {
+    const analyzer = new SquatAnalyzer({ smoothingAlpha: 1, depthTargetDegrees: 110 });
     analyzer.analyzeFrame(frame(170, 0));
-    const invisible = frame(100, 100);
-    invisible.landmarks = invisible.landmarks.map(() => landmark(0.5, 0.5, 0));
-    const snapshot = analyzer.analyzeFrame(invisible);
-    expect(snapshot.poseQuality).toBe("insufficient");
-    expect(snapshot.repCount).toBe(0);
-    expect(snapshot.kneeAngleDegrees).toBeNull();
+    analyzer.analyzeFrame(frame(150, 200));
+    analyzer.analyzeFrame(frame(105, 300));
+    analyzer.analyzeFrame(frame(120, 400));
+    analyzer.analyzeFrame(frame(145, 600));
+    const completed = analyzer.analyzeFrame(frame(165, 800));
+    expect(completed.repCount).toBe(1);
+    expect(completed.lastRep?.minimumKneeAngleDegrees).toBeCloseTo(105, 0);
+    expect(completed.lastRep?.depthTargetMet).toBe(false);
   });
 
-  it("clamps user-selected angle thresholds to the supported range", () => {
+  it("keeps the depth threshold fixed for the active rep", () => {
+    const analyzer = new SquatAnalyzer({ smoothingAlpha: 1, depthTargetDegrees: 110 });
+    analyzer.analyzeFrame(frame(170, 0));
+    analyzer.analyzeFrame(frame(150, 200));
+    analyzer.setDepthTargetDegrees(90);
+    expect(analyzer.analyzeFrame(frame(105, 300)).phase).toBe("descending");
+    expect(analyzer.analyzeFrame(frame(106, 400)).phase).toBe("descending");
+    expect(analyzer.analyzeFrame(frame(107, 500)).phase).toBe("bottom");
+    analyzer.analyzeFrame(frame(125, 600));
+    const completed = analyzer.analyzeFrame(frame(165, 900));
+    expect(completed.lastRep?.depthTargetDegrees).toBe(110);
+    expect(completed.lastRep?.depthTargetMet).toBe(true);
+    expect(completed.depthTargetDegrees).toBe(90);
+  });
+
+  it("resets a transient rep and requires standing calibration after prolonged pose loss", () => {
+    const analyzer = new SquatAnalyzer({ smoothingAlpha: 1, lostPoseResetMs: 900 });
+    analyzer.analyzeFrame(frame(170, 0));
+    analyzer.analyzeFrame(frame(150, 200));
+    const lost = analyzer.analyzeFrame(lostPoseFrame(1150));
+    expect(lost.poseQuality).toBe("insufficient");
+    expect(lost.phase).toBe("awaiting_standing");
+    expect(lost.repCount).toBe(0);
+    expect(lost.currentRepDurationMs).toBeNull();
+
+    expect(analyzer.analyzeFrame(frame(165, 1200)).phase).toBe("standing");
+    expect(analyzer.analyzeFrame(frame(165, 1300)).repCount).toBe(0);
+  });
+
+  it("does not allow invalid dimensions or timestamps to corrupt a later valid frame", () => {
+    const analyzer = new SquatAnalyzer({ smoothingAlpha: 1 });
+    const invalid = frame(170, 0);
+    invalid.width = Number.NaN;
+    expect(analyzer.analyzeFrame(invalid).poseQuality).toBe("insufficient");
+    expect(analyzer.analyzeFrame({ ...frame(170, 100), timestamp: Number.NaN }).poseQuality).toBe("insufficient");
+    expect(analyzer.analyzeFrame(frame(170, 200)).phase).toBe("standing");
+  });
+
+  it("clamps user-selected angle thresholds to the supported range and ignores non-finite values", () => {
     const analyzer = new SquatAnalyzer();
     expect(analyzer.setDepthTargetDegrees(50).depthTargetDegrees).toBe(90);
     expect(analyzer.setDepthTargetDegrees(180).depthTargetDegrees).toBe(130);
+    expect(analyzer.setDepthTargetDegrees(Number.NaN).depthTargetDegrees).toBe(130);
   });
 
   it("resets count and transient phase between sessions", () => {
