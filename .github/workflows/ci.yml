@@ -17,8 +17,6 @@ jobs:
   validate:
     name: Lint, type-check, and build
     runs-on: ubuntu-latest
-    permissions:
-      contents: read
     steps:
       - name: Check out repository
         uses: actions/checkout@v4
@@ -27,15 +25,10 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: 22
+          cache: npm
 
-      # The repository is bootstrapping its lockfile. All later runs use npm ci.
       - name: Install dependencies
-        run: |
-          if [ -f package-lock.json ]; then
-            npm ci --no-audit --no-fund
-          else
-            npm install --no-audit --no-fund
-          fi
+        run: npm ci --no-audit --no-fund
 
       - name: Lint
         run: npm run lint
@@ -45,51 +38,3 @@ jobs:
 
       - name: Production build
         run: npm run build
-
-      - name: Upload generated npm lockfile
-        if: always() && hashFiles('package-lock.json') != ''
-        uses: actions/upload-artifact@v4
-        with:
-          name: npm-lockfile-${{ github.sha }}
-          path: package-lock.json
-          if-no-files-found: error
-          retention-days: 7
-
-  bootstrap-lockfile:
-    name: Commit initial lockfile
-    needs: validate
-    if: needs.validate.result == 'success' && github.event_name == 'push' && github.ref == 'refs/heads/master'
-    runs-on: ubuntu-latest
-    permissions:
-      contents: write
-    steps:
-      - name: Check out repository
-        uses: actions/checkout@v4
-
-      - name: Check whether lockfile is already committed
-        id: lockfile
-        shell: bash
-        run: |
-          if [ -f package-lock.json ]; then
-            echo "exists=true" >> "$GITHUB_OUTPUT"
-          else
-            echo "exists=false" >> "$GITHUB_OUTPUT"
-          fi
-
-      - name: Download generated lockfile
-        if: steps.lockfile.outputs.exists == 'false'
-        uses: actions/download-artifact@v4
-        with:
-          name: npm-lockfile-${{ github.sha }}
-          path: ./generated-lockfile
-
-      - name: Commit lockfile
-        if: steps.lockfile.outputs.exists == 'false'
-        shell: bash
-        run: |
-          cp generated-lockfile/package-lock.json package-lock.json
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add package-lock.json
-          git commit -m "chore: add npm lockfile"
-          git push origin "HEAD:${GITHUB_REF_NAME}"

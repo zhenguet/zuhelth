@@ -25,7 +25,7 @@ npm run dev
 
 Open [http://localhost:3000](http://localhost:3000).
 
-When dependencies change, update them with `npm install <package>` and commit the resulting `package.json` and `package-lock.json` together. Use `npm ci` for clean, reproducible installs.
+When changing dependencies, use `npm install <package>` (or `npm uninstall <package>`) and commit the resulting `package.json` and `package-lock.json` together. Use `npm ci` for clean, reproducible installs.
 
 ## Scripts
 
@@ -37,7 +37,7 @@ When dependencies change, update them with `npm install <package>` and commit th
 
 ## Continuous integration
 
-GitHub Actions runs dependency installation, ESLint, TypeScript checking, and a production build on pushes and pull requests targeting `master`. On the initial push only, the workflow commits the generated npm lockfile after all validation steps pass. Subsequent runs use `npm ci`.
+GitHub Actions runs `npm ci`, ESLint, TypeScript checking, and a production build on pushes and pull requests targeting `master`. CI uses the committed lockfile and caches npm packages for faster subsequent runs.
 
 ## Current scope
 
